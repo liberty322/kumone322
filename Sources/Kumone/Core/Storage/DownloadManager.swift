@@ -816,6 +816,8 @@ final class DownloadManager: ObservableObject {
             catalog.jobs[i].status = .complete
             cancelNetworkRetry(job.id)
             catalog.jobs[i].errorMessage = nil
+            catalog.jobs[i].errorDomain = nil
+            catalog.jobs[i].errorCode = nil
             publish()
             try await persist()
             guard current(job), let i = index(job.id) else { return }
@@ -853,6 +855,9 @@ final class DownloadManager: ObservableObject {
             && (!network.permits(catalog.jobs[i]) || retries < delays.count)
         catalog.jobs[i].status = waitsForNetwork ? .waitingNetwork : ((error as? OfflineAudioError) == .unavailable ? .unavailable : .failed)
         catalog.jobs[i].errorMessage = waitsForNetwork ? nil : Self.message(for: error)
+        let diagnosticError = error as NSError
+        catalog.jobs[i].errorDomain = diagnosticError.domain
+        catalog.jobs[i].errorCode = diagnosticError.code
         catalog.jobs[i].attempt = nil
         if workers[job.id]?.attempt == job.attempt { workers[job.id] = nil }
         if waitsForNetwork, network.permits(catalog.jobs[i]) {
