@@ -768,7 +768,7 @@ final class DownloadManager: ObservableObject {
             } catch { await fail(job: job, error: error) }
             transport.acknowledge(receipt)
             await store.releaseDownloadReservation(token: receipt.token)
-        case let .failed(token, domain, code, resumeData):
+        case let .failed(token, domain, code, underlyingDomain, underlyingCode, failureReason, resumeData):
             guard let i = index(token: token), ![.complete, .paused, .cancelled].contains(catalog.jobs[i].status) else { return }
             let job = catalog.jobs[i]
             transport.cancel(token: token)
@@ -776,8 +776,14 @@ final class DownloadManager: ObservableObject {
             guard current(job) else { return }
             if let resumeData { try? await persistence.saveResumeData(resumeData, jobID: job.id) }
             guard current(job) else { return }
-            if ConnectivityFailure.matches(NSError(domain: domain, code: code)) {
-                await fail(job: job, error: NSError(domain: domain, code: code))
+            var diagnosticInfo: [String: Any] = [:]
+            if let underlyingDomain, let underlyingCode {
+                diagnosticInfo[NSUnderlyingErrorKey] = NSError(domain: underlyingDomain, code: underlyingCode)
+            }
+            if let failureReason { diagnosticInfo[NSLocalizedFailureReasonErrorKey] = failureReason }
+            let transportError = NSError(domain: domain, code: code, userInfo: diagnosticInfo)
+            if ConnectivityFailure.matches(transportError) {
+                await fail(job: job, error: transportError)
             } else {
                 let hadResumeData = await persistence.resumeData(jobID: job.id) != nil
                 guard current(job) else { return }
@@ -788,7 +794,7 @@ final class DownloadManager: ObservableObject {
                     catalog.jobs[i].attempt = nil
                     catalog.jobs[i].status = .queued
                     publish(); try? await persist(); schedule()
-                } else { await fail(job: job, error: NSError(domain: domain, code: code)) }
+                } else { await fail(job: job, error: transportError) }
             }
         case .backgroundEventsFinished:
             // Register the next small batch with the system before handing
