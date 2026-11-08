@@ -818,6 +818,9 @@ final class DownloadManager: ObservableObject {
             catalog.jobs[i].errorMessage = nil
             catalog.jobs[i].errorDomain = nil
             catalog.jobs[i].errorCode = nil
+            catalog.jobs[i].errorUnderlyingDomain = nil
+            catalog.jobs[i].errorUnderlyingCode = nil
+            catalog.jobs[i].errorFailureReason = nil
             publish()
             try await persist()
             guard current(job), let i = index(job.id) else { return }
@@ -858,6 +861,14 @@ final class DownloadManager: ObservableObject {
         let diagnosticError = error as NSError
         catalog.jobs[i].errorDomain = diagnosticError.domain
         catalog.jobs[i].errorCode = diagnosticError.code
+        if let underlying = diagnosticError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            catalog.jobs[i].errorUnderlyingDomain = underlying.domain
+            catalog.jobs[i].errorUnderlyingCode = underlying.code
+        } else {
+            catalog.jobs[i].errorUnderlyingDomain = nil
+            catalog.jobs[i].errorUnderlyingCode = nil
+        }
+        catalog.jobs[i].errorFailureReason = diagnosticError.localizedFailureReason.map { String($0.prefix(240)) }
         catalog.jobs[i].attempt = nil
         if workers[job.id]?.attempt == job.attempt { workers[job.id] = nil }
         if waitsForNetwork, network.permits(catalog.jobs[i]) {
