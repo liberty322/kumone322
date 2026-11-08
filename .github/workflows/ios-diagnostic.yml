@@ -1,6 +1,7 @@
 name: iOS diagnostic build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - diagnostics/download-error-codes
@@ -10,7 +11,7 @@ permissions:
 
 concurrency:
   group: ios-diagnostic-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-unsigned-ipa:
