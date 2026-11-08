@@ -45,6 +45,9 @@ struct DownloadJob: Codable, Identifiable {
     /// Underlying failure details for diagnosing offline download errors.
     var errorDomain: String?
     var errorCode: Int?
+    var errorUnderlyingDomain: String?
+    var errorUnderlyingCode: Int?
+    var errorFailureReason: String?
     var metadataPending = true
     var retries = 0
     let createdAt: Date
