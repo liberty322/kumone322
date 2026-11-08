@@ -27,7 +27,7 @@ enum DownloadTransportEvent {
     case progress(token: String, received: Int64, expected: Int64)
     case waiting(token: String)
     case finished(CompletedDownload)
-    case failed(token: String, domain: String, code: Int, resumeData: Data?)
+    case failed(token: String, domain: String, code: Int, underlyingDomain: String?, underlyingCode: Int?, failureReason: String?, resumeData: Data?)
     case backgroundEventsFinished
 }
 
@@ -60,7 +60,7 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let token = downloadTask.taskDescription, Self.validToken(token) else { return }
         guard let response = downloadTask.response as? HTTPURLResponse else {
-            continuation.yield(.failed(token: token, domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, resumeData: nil))
+            continuation.yield(.failed(token: token, domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse, underlyingDomain: nil, underlyingCode: nil, failureReason: nil, resumeData: nil))
             return
         }
         if let url = response.url { CDNHost.markReachable(url) }
@@ -77,7 +77,11 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
             continuation.yield(.finished(receipt))
         } catch {
             let error = error as NSError
-            continuation.yield(.failed(token: token, domain: error.domain, code: error.code, resumeData: nil))
+            continuation.yield(.failed(token: token, domain: error.domain, code: error.code,
+                                       underlyingDomain: (error.userInfo[NSUnderlyingErrorKey] as? NSError)?.domain,
+                                       underlyingCode: (error.userInfo[NSUnderlyingErrorKey] as? NSError)?.code,
+                                       failureReason: error.localizedFailureReason.map { String($0.prefix(240)) },
+                                       resumeData: nil))
         }
     }
 
@@ -103,6 +107,9 @@ final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unch
             _ = CDNHost.failover(from: url, after: error)
         }
         continuation.yield(.failed(token: token, domain: error.domain, code: error.code,
+                                   underlyingDomain: (error.userInfo[NSUnderlyingErrorKey] as? NSError)?.domain,
+                                   underlyingCode: (error.userInfo[NSUnderlyingErrorKey] as? NSError)?.code,
+                                   failureReason: error.localizedFailureReason.map { String($0.prefix(240)) },
                                    resumeData: error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data))
     }
 
